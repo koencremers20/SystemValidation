@@ -1,52 +1,79 @@
 %data
-sort Error = struct temperatureError | doorError | filamentTypeError; 
-sort buttons = struct startPrint | Reset | Unlock;
+sort Error = struct temperatureError | doorError | dimensionError; 
+sort buttons = struct unlock | startPrint | reset;
 sort filamentType = struct PLA; %| ABS;
 %sort printBedTemp = struct c60 | c80;
+
+%global	
+glob currentNozzleTemp, currentPrintBedTemp:Nat;
+	
+
 % map
-map tempNozzle: filamentType -> Nat;
-	tempPrintBed: filamentType -> Nat;
+map maxDimension: Nat;
+	
+% tempNozzle: filamentType -> Nat;
+%	tempPrintBed: filamentType -> Nat;
+
 %variable
-var idealNozzleTemp, idealPrintBedTemp:Nat;
-	nozzleTemp, printBedTemp:Nat;
-
-
+%var idealNozzleTemp, idealPrintBedTemp:Nat;
 
 % equation
-eqn tempNozzle(PLA) = 214;
-	tempPrintBed(PLA) = 60;
-	%idealNozzleTemp = 0;
-	%idealPrintBedTemp = 0;
+eqn maxDimension = 1;
+%tempNozzle(PLA) = 214;
+%	tempPrintBed(PLA) = 60;
+	%idealNozzleTemp =  tempNozzle(PLA);
+	%idealPrintBedTemp = tempPrintBed(PLA);
 	%tempNozzle(ABS) = 260;
 	%tempPrintBed(ABS) = 80;
 	
 % input actions
 act buttonPress: buttons;
-    setDimensions, returnTemperature, returnProperties: Nat # Nat;
+    setDimensions, returnTemperature: Nat# Nat;
+    returnFilamentType: filamentType;
 	returnDoorStatus: Bool # Bool;
 
 % output actions
 act getTemperature, getDoorStatus;
-	setDoor, returnResult: Bool;
-	turnHeatingOn: Nat # Nat;
+	lockDoor, returnResult: Bool;
+	turnHeatingOn: Bool # Bool;
 	move: Nat # Nat # Bool;
 	returnError: Error;
 
 % internal actions
-act _heatingFinished: Bool;
+act _reset,_unlockDoor,_heatingFinished: Bool;
  	_setTemperature: Nat # Nat;
+	_startPrint: Nat # Nat;
+
 
 % Main Controller
-proc 
-	startPrint = getFilamentType ;
-	getFilamentType = setTemperature(tempNozzle(PLA), tempPrintBed(PLA));
-% User Interface Controller
-
-% Temperature Controller
 proc
-	setTemperature(nTemp:Nat, pbTemp:Nat) = _setTemperature(1,3);
-	%heatNozzle(nTemp:Nat) = (nozzleTemp
-	%heatPrintBed(pbTemp:Nat) = 
+	startPrint(x:Nat,y:Nat,tempNozzle:Nat,tempPrintBed:Nat) = 
+		(x>maxDimension || y>maxDimension)-> displayError(dimensionError)
+				<>getDoorStatus .(
+                  returnDoorStatus(false, true).
+					(_setTemperature(tempNozzle,tempPrintBed).(
+						_heatingFinished(true).move(0,0,false).move(x,0,true).move(x,y,true).move(0,y,true).move(0,0,true) 
+						+
+						_heatingFinished(false).displayError(temperatureError)))
+				 + returnDoorStatus(true,  true).displayError(doorError)
+				 + returnDoorStatus(false,false).displayError(doorError)
+				 + returnDoorStatus(true, false).displayError(doorError))
++_reset(true).reset;
+	setDoorState(locked: Bool) = lockDoor(locked);
+	
+
+% User Interface Controller
+proc 
+	initUIC(x:Nat,y:Nat,tempNozzle:Nat,tempPrintBed:Nat) = 
+			   buttonPress(unlock).setDoorState(false) 
+			 + buttonPress(startPrint).startPrint(x,y,tempNozzle,tempPrintBed)
+             + buttonPress(reset)._reset(true).reset;
+	%setDimensions(x_cord:Nat,y_cord:Nat) = 
+	displayError(e: Error) = returnError(e);
+	reset = initUIC(1,1,215,80);
+% Temperature Controller
+
+									
 
 
-init startPrint;
+init hide({_reset,_heatingFinished,_setTemperature}, initUIC(1,1,215,80));

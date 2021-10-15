@@ -1,4 +1,6 @@
 <root>
  <spec>Printer_spec.mcrl2</spec>
- <properties/>
+ <properties>
+  <property>deadlock free</property>
+ </properties>
 </root>
